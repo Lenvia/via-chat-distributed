@@ -1,7 +1,6 @@
 syntax = "proto3";
 
-option go_package = ".;gpt";
-
+option go_package = "github.com/via/pb/gpt;gpt";
 
 service GptMsgSender {
   rpc Send(GptMsgRequest) returns (GptMsgResponse) {}

@@ -38,7 +38,6 @@ func LoadGPT(file *ini.File) {
 
 	config := gogpt.DefaultConfig(ApiKey)
 	OpenaiClient = gogpt.NewClientWithConfig(config)
-
 }
 
 func GetReply(client *openai.Client, query string) (string, error) {
