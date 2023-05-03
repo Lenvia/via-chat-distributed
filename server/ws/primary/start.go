@@ -2,8 +2,8 @@ package primary
 
 import (
 	"github.com/gin-gonic/gin"
-	"via-chat/ws"
-	"via-chat/ws/go_ws"
+	"via-chat-distributed/ws"
+	"via-chat-distributed/ws/go_ws"
 )
 
 func Create() ws.ServeInterface {

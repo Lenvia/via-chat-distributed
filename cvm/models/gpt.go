@@ -1,54 +1,44 @@
-package gpt
+package models
 
 import (
 	"context"
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/sashabaranov/go-openai"
 	gogpt "github.com/sashabaranov/go-openai"
 	"gopkg.in/ini.v1"
 	"log"
-	"net/http"
-	"net/url"
-	"via-chat/models"
+	"os"
 )
 
 var OpenaiClient *openai.Client
 
-var ChatGptName string
+func InitGPT() {
+	gptConfigFilePath := "configs/openai_config.ini"
+	// 使用 os.Stat() 函数获取文件的状态信息
+	_, err := os.Stat(gptConfigFilePath)
+	if err == nil {
+		// 文件存在
+		file, err := ini.Load("configs/openai_config.ini")
+		if err != nil {
+			fmt.Println("配置文件读取错误:", err)
+		}
+		LoadGPT(file)
+		log.Println("初始化GPT完成!")
+	} else {
+		log.Println(err)
+	}
+}
 
 func LoadGPT(file *ini.File) {
 	ApiKey := file.Section("gpt").Key("API_KEY").String()
-	ChatGptName = file.Section("gpt").Key("GPT_NAME").String()
-
 	if len(ApiKey) < 10 {
 		return
 	}
 
 	config := gogpt.DefaultConfig(ApiKey)
-	proxyUrl, err := url.Parse("http://127.0.0.1:7890")
-	//proxyUrl, err := url.Parse("http://host.docker.internal:7890") // 访问宿主机代理
-	if err != nil {
-		log.Println(err)
-	}
-	transport := &http.Transport{
-		Proxy: http.ProxyURL(proxyUrl),
-	}
-	config.HTTPClient = &http.Client{
-		Transport: transport,
-	}
-
 	OpenaiClient = gogpt.NewClientWithConfig(config)
 
-	if OpenaiClient != nil {
-		user := models.FindUserByField("username", ChatGptName)
-		if user.ID <= 0 {
-			_ = models.AddUser(map[string]interface{}{
-				"username":  ChatGptName,
-				"password":  "NULL",
-				"avatar_id": "1",
-			})
-		}
-	}
 }
 
 func GetReply(client *openai.Client, query string) (string, error) {

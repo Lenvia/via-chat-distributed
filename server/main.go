@@ -2,18 +2,14 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
-	"gopkg.in/ini.v1"
 	"log"
 	"net/http"
-	"os"
-	"via-chat/configs"
-	"via-chat/models"
-	"via-chat/routes"
-	"via-chat/services/gpt"
-	"via-chat/ws/go_ws"
+	"via-chat-distributed/configs"
+	"via-chat-distributed/models"
+	"via-chat-distributed/routes"
+	"via-chat-distributed/ws/go_ws"
 )
 
 func init() {
@@ -30,24 +26,8 @@ func init() {
 		log.Fatal(err) // 读取配置文件失败，记录日志并退出程序
 	}
 
-	models.InitDB() // 初始化数据库
-
-	// gpt
-	gptConfigFilePath := "configs/openai_config.ini"
-	// 使用 os.Stat() 函数获取文件的状态信息
-	_, err := os.Stat(gptConfigFilePath)
-	if err == nil {
-		// 文件存在
-		file, err := ini.Load("configs/openai_config.ini")
-		if err != nil {
-			fmt.Println("配置文件读取错误:", err)
-		}
-		gpt.LoadGPT(file)
-		log.Println("初始化GPT完成!")
-	} else {
-		log.Println(err)
-	}
-
+	models.InitDB()        // 初始化数据库
+	models.InitGptClient() // gpt
 }
 
 func main() {

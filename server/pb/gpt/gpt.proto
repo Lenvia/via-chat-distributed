@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option go_package = ".;gpt";
+
+
+service GptMsgSender {
+  rpc Send(GptMsgRequest) returns (GptMsgResponse) {}
+}
+
+message GptMsgRequest {
+  string Query = 1;
+}
+
+message GptMsgResponse {
+  string Reply = 1;
+}
+
+

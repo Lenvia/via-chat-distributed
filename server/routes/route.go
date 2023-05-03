@@ -2,9 +2,9 @@ package routes
 
 import (
 	"github.com/gin-gonic/gin"
-	"via-chat/api/v1"
-	"via-chat/middleware"
-	"via-chat/ws/primary"
+	"via-chat-distributed/api/v1"
+	"via-chat-distributed/middleware"
+	"via-chat-distributed/ws/primary"
 )
 
 func InitRoute() *gin.Engine {

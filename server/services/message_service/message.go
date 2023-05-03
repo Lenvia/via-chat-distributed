@@ -1,6 +1,6 @@
 package message_service
 
-import "via-chat/models"
+import "via-chat-distributed/models"
 
 func GetLimitMsg(roomId string, offset int) []map[string]interface{} {
 	return models.GetLimitMsg(roomId, offset)

@@ -4,10 +4,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
-	"via-chat/services/helper"
-	"via-chat/services/message_service"
-	"via-chat/services/user_service"
-	"via-chat/ws/primary"
+	"via-chat-distributed/services/helper"
+	"via-chat-distributed/services/message_service"
+	"via-chat-distributed/services/user_service"
+	"via-chat-distributed/ws/primary"
 )
 
 // Index 函数用于显示应用程序的登录界面。

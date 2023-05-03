@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/viper"
 	"net/http"
 	"strings"
-	"via-chat/services/errmsg"
+	"via-chat-distributed/services/errmsg"
 )
 
 type JWT struct {

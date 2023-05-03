@@ -1,6 +1,7 @@
 package go_ws
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -12,10 +13,10 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"via-chat/models"
-	"via-chat/services/gpt"
-	"via-chat/services/helper"
-	"via-chat/ws"
+	"via-chat-distributed/models"
+	"via-chat-distributed/pb/gpt"
+	"via-chat-distributed/services/helper"
+	"via-chat-distributed/ws"
 )
 
 // 客户端连接详情
@@ -460,12 +461,12 @@ func getRoomId() (string, int) {
 func requestGPT() {
 	fmt.Println(clientMsg.Data.Content)
 	pattern := "@GPT"
-	var reply string
+	var reply *gpt.GptMsgResponse
 	var err error
 	if strings.HasPrefix(clientMsg.Data.Content, pattern) {
 		query := clientMsg.Data.Content[len(pattern):]
-		if gpt.OpenaiClient != nil {
-			reply, err = gpt.GetReply(gpt.OpenaiClient, query)
+		if models.GptClient != nil {
+			reply, err = models.GptClient.Send(context.Background(), &gpt.GptMsgRequest{Query: query})
 			if err != nil {
 				log.Println(err)
 				return
@@ -474,21 +475,21 @@ func requestGPT() {
 			roomId, _ := getRoomId()
 			// 持久化
 			var message models.Message
-			ChatGptIdInt := int(models.FindUserByField("username", gpt.ChatGptName).ID)
+			ChatGptIdInt := int(models.FindUserByField("username", models.ChatGptName).ID)
 
 			message = models.SaveContent(map[string]interface{}{
 				"user_id":    ChatGptIdInt,
 				"to_user_id": 0,
-				"content":    reply,
+				"content":    reply.String(),
 				"room_id":    roomId,
 			})
 
 			// 制作消息
 			data := msgData{
-				Username:  gpt.ChatGptName,
+				Username:  models.ChatGptName,
 				Uid:       strconv.Itoa(ChatGptIdInt),
 				RoomId:    roomId,
-				Content:   reply,
+				Content:   reply.String(),
 				Time:      time.Now().UnixNano() / 1e6, // 13位  10位 => now.Unix()
 				CreatedAt: message.CreatedAt,
 				UpdatedAt: message.UpdatedAt,

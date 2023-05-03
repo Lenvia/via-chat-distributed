@@ -6,11 +6,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"time"
-	"via-chat/middleware"
-	"via-chat/models"
-	"via-chat/services/errmsg"
-	"via-chat/services/helper"
-	"via-chat/services/validator"
+	"via-chat-distributed/middleware"
+	"via-chat-distributed/models"
+	"via-chat-distributed/services/errmsg"
+	"via-chat-distributed/services/helper"
+	"via-chat-distributed/services/validator"
 )
 
 func Login(c *gin.Context) {
