@@ -37,6 +37,18 @@ func LoadGPT(file *ini.File) {
 	}
 
 	config := gogpt.DefaultConfig(ApiKey)
+
+	//proxyUrl, err := url.Parse("http://127.0.0.1:7890")
+	//if err != nil {
+	//	log.Println(err)
+	//}
+	//transport := &http.Transport{
+	//	Proxy: http.ProxyURL(proxyUrl),
+	//}
+	//config.HTTPClient = &http.Client{
+	//	Transport: transport,
+	//}
+
 	OpenaiClient = gogpt.NewClientWithConfig(config)
 }
 
@@ -52,6 +64,7 @@ func GetReply(client *openai.Client, query string) (string, error) {
 		},
 	)
 	if err != nil {
+		log.Println(err)
 		return "", err
 	}
 
