@@ -26,7 +26,7 @@ func CreateBot(file *ini.File) {
 }
 
 func InitGptClient() {
-	l, err := grpc.Dial("127.0.0.1:8765", grpc.WithInsecure())
+	l, err := grpc.Dial("10.242.228.32:8765", grpc.WithInsecure())
 	if err != nil {
 		log.Println(err)
 		return
