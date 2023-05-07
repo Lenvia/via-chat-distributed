@@ -213,28 +213,28 @@ func read(c *websocket.Conn) {
 			continue
 		}
 
+		// 最关键的地方！这里谨慎变更
 		json.Unmarshal(message, &clientMsg)
 		fmt.Println("来自客户端的消息", clientMsg, c.RemoteAddr())
 		if clientMsg.Data.Uid != "" { // 已经登录过的用户
-			roomId, _ := getRoomId(clientMsg)
 			if clientMsg.Status == msgTypeOnline { // 进入房间，建立连接
 				enterRooms <- wsClients{
 					Conn:       c,
 					RemoteAddr: c.RemoteAddr().String(),
 					Uid:        clientMsg.Data.Uid,
 					Username:   clientMsg.Data.Username,
-					RoomId:     roomId,
+					RoomId:     clientMsg.Data.RoomId,
 					AvatarId:   clientMsg.Data.AvatarId,
 				}
 			}
 
 			// 根据客户端发送的消息类型，将其转化为需要发送给其他客户端的服务端消息，并添加到消息队列中，等待发送
-			_, serveMsg := formatServeMsgStr(clientMsg.Status, roomId)
+			_, serveMsg := formatServeMsgStr(&clientMsg)
 			//publishMsg(roomId, serveMsgBytes)
 
 			sMsg <- serveMsg
 
-			go requestGPT()
+			go requestGPT(&clientMsg)
 		}
 	}
 }
@@ -393,9 +393,9 @@ func disconnect(conn *websocket.Conn) {
 }
 
 // 格式化传送给客户端的消息数据
-func formatServeMsgStr(status int, roomId string) ([]byte, msg) {
-
-	roomIdInt, _ := strconv.Atoi(roomId)
+func formatServeMsgStr(clientMsg *msg) ([]byte, msg) {
+	roomId, roomIdInt := getRoomId(clientMsg)
+	status := clientMsg.Status
 
 	//log.Println(reflect.TypeOf(var))
 
@@ -465,14 +465,14 @@ func formatServeMsgStr(status int, roomId string) ([]byte, msg) {
 	return serveMsgStr, jsonStrServeMsg
 }
 
-func getRoomId(clientMsg msg) (string, int) {
+func getRoomId(clientMsg *msg) (string, int) {
 	roomId := clientMsg.Data.RoomId
 
 	roomIdInt, _ := strconv.Atoi(roomId)
 	return roomId, roomIdInt
 }
 
-func requestGPT() {
+func requestGPT(clientMsg *msg) {
 	fmt.Println(clientMsg.Data.Content)
 	pattern := "@GPT"
 	var reply *gpt.GptMsgResponse
