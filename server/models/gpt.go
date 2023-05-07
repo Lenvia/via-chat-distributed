@@ -50,6 +50,6 @@ func InitGptClient() {
 		log.Println(err)
 	}
 
-	fmt.Println("Gpt is ready.\n", GptClient)
+	log.Println("Gpt is ready.")
 
 }

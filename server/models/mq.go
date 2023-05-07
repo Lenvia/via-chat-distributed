@@ -33,4 +33,6 @@ func InitMessageQueue() {
 	if err != nil {
 		log.Println(err)
 	}
+
+	log.Println("Message Queue is ready.")
 }
