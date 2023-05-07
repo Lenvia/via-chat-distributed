@@ -20,39 +20,15 @@ import (
 )
 
 // 客户端连接详情
-// wsClients 结构体定义了 WebSocket 客户端的信息
-type wsClients struct {
+
+// WsClients 结构体定义了 WebSocket 客户端的信息
+type WsClients struct {
 	Conn       *websocket.Conn // websocket 连接对象
 	RemoteAddr string          // 客户端远程地址
 	Uid        string          // 客户端唯一标识符
 	Username   string          // 客户端用户名
 	RoomId     string          // 客户端所在房间 id
 	AvatarId   string          // 客户端头像 id
-}
-
-// msgData 结构体定义了消息体的数据结构
-type msgData struct {
-	Uid      string        `json:"uid"`       // 发送者 uid
-	Username string        `json:"username"`  // 发送者用户名
-	AvatarId string        `json:"avatar_id"` // 发送者头像 id
-	ToUid    string        `json:"to_uid"`    // 接收者 uid
-	Content  string        `json:"content"`   // 消息内容
-	ImageUrl string        `json:"image_url"` // 图片地址
-	RoomId   string        `json:"room_id"`   // 房间 id
-	Count    int           `json:"count"`     // 房间人数
-	List     []interface{} // 房间中其他客户端信息
-	Time     int64         // 消息发送时间
-	// 下面是数据库额外附加信息，兼容一下
-	ID        uint      `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updatedAt"`
-}
-
-// msg 结构体定义了 WebSocket 消息体
-type msg struct {
-	Status int             `json:"status"` // 消息状态码
-	Data   msgData         `json:"data"`   // 消息体数据
-	Conn   *websocket.Conn // 对应的客户端连接对象
 }
 
 // pingStorage 结构体定义了心跳包信息
@@ -65,14 +41,13 @@ type pingStorage struct {
 // 全局变量定义初始化（当前server服务的所有用户共享）
 var (
 	wsUpgrader = websocket.Upgrader{} // WebSocket 升级器，用于升级普通的 HTTP 连接为 WebSocket 连接
-	clientMsg  = msg{}
+	clientMsg  = models.WebSocketMsg{}
 	mutex      = sync.Mutex{}
 
-	// rooms = [roomCount + 1][]wsClients{}
+	// rooms = [roomCount + 1][]WsClients{}
 	rooms       = make(map[int][]interface{}) // 聊天室 map，以房间 id 为 key，保存连接对象和其他客户端信息
 	conn2roomId = make(map[*websocket.Conn]string)
-	enterRooms  = make(chan wsClients)       // 进入聊天室的客户端连接，用于处理客户端连接请求
-	sMsg        = make(chan msg)             // 发送的消息，用于处理客户端的消息
+	enterRooms  = make(chan WsClients)       // 进入聊天室的客户端连接，用于处理客户端连接请求
 	offline     = make(chan *websocket.Conn) // 离线客户端的连接，用于处理客户端断开连接的请求
 	chNotify    = make(chan int, 1)          // 通知客户端，用于处理对聊天室客户端状态变化的通知
 	pingMap     []interface{}                // 心跳列表，存储客户端的心跳检测信息
@@ -87,10 +62,10 @@ const msgTypePrivateChat = 5   // 私聊
 
 const roomCount = 6 // 房间总数
 
-func publishMsg(roomId string, serializedMsg []byte) {
-	err := models.NC.Publish(models.BaseTopic+roomId, serializedMsg)
+func publishMsg(serializedMsg []byte) {
+	err := models.NC.Publish(models.BaseTopic, serializedMsg)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 }
 
@@ -125,7 +100,7 @@ func Run(gin *gin.Context) {
 
 	go read(c)
 
-	// 对于每一个客户端连接，也会新建一个协程去监听 enterRooms 和 sMsg 这两个通道。
+	// 对于每一个客户端连接，也会新建一个协程去监听 enterRooms 和 models.SMsg 这两个通道。
 	// 多个协程可以并发读写通道，但在任意时刻，只有其中的一个协程可以读取或写入该通道
 	go write()
 
@@ -218,7 +193,7 @@ func read(c *websocket.Conn) {
 		fmt.Println("来自客户端的消息", clientMsg, c.RemoteAddr())
 		if clientMsg.Data.Uid != "" { // 已经登录过的用户
 			if clientMsg.Status == msgTypeOnline { // 进入房间，建立连接
-				enterRooms <- wsClients{
+				enterRooms <- WsClients{
 					Conn:       c,
 					RemoteAddr: c.RemoteAddr().String(),
 					Uid:        clientMsg.Data.Uid,
@@ -229,11 +204,10 @@ func read(c *websocket.Conn) {
 			}
 
 			// 根据客户端发送的消息类型，将其转化为需要发送给其他客户端的服务端消息，并添加到消息队列中，等待发送
-			_, serveMsg := formatServeMsgStr(&clientMsg)
-			//publishMsg(roomId, serveMsgBytes)
+			serveMsgBytes, _ := formatServeMsgStr(&clientMsg)
+			publishMsg(serveMsgBytes)
 
-			sMsg <- serveMsg
-
+			//models.SMsg <- serveMsg
 			go requestGPT(&clientMsg)
 		}
 	}
@@ -245,7 +219,7 @@ func write() {
 		//捕获write抛出的panic
 		if err := recover(); err != nil {
 			log.Println("write发生错误", err)
-			//panic(err)
+
 		}
 	}()
 
@@ -254,8 +228,8 @@ func write() {
 		// 如果从 enterRooms 通道中获取到一个客户端连接信息，则处理该连接
 		case r := <-enterRooms:
 			handleConnClients(r.Conn, r.RoomId)
-		// 如果从 sMsg 通道中获取到一个服务端消息，则将其转化为需要发送给客户端的 JSON 字符串，并根据不同的消息类型进行相应的处理
-		case cl := <-sMsg:
+		// 如果从 models.SMsg 通道中获取到一个服务端消息，则将其转化为需要发送给客户端的 JSON 字符串，并根据不同的消息类型进行相应的处理
+		case cl := <-models.SMsg:
 			fmt.Println("即将发送消息：", cl)
 			serveMsgStr, _ := json.Marshal(cl)
 			switch cl.Status {
@@ -263,16 +237,16 @@ func write() {
 			case msgTypeOnline, msgTypeSend:
 				notify(string(serveMsgStr), cl.Data.RoomId) // 发送者，发送消息
 
-			case msgTypeGetOnlineUser:
-				// 无缓冲区通道 chNotify 确保同一时刻只有一个协程向客户端发送消息
-				chNotify <- 1
-				cl.Conn.WriteMessage(websocket.TextMessage, serveMsgStr)
-				<-chNotify
+				//case msgTypeGetOnlineUser:
+				//	// 无缓冲区通道 chNotify 确保同一时刻只有一个协程向客户端发送消息
+				//	chNotify <- 1
+				//	cl.Conn.WriteMessage(websocket.TextMessage, serveMsgStr)
+				//	<-chNotify
 				//case msgTypePrivateChat:
 				//	chNotify <- 1
 				//	toC := findToUserCoonClient() // 查找需要发送消息的客户端连接对象，并发送消息
 				//	if toC != nil {
-				//		toC.(wsClients).Conn.WriteMessage(websocket.TextMessage, serveMsgStr)
+				//		toC.(WsClients).Conn.WriteMessage(websocket.TextMessage, serveMsgStr)
 				//	}
 				//	<-chNotify
 			}
@@ -291,16 +265,16 @@ func handleConnClients(c *websocket.Conn, roomId string) {
 	// 使用 objColl.Reject 过滤出不是当前客户端的连接对象
 	// 最终结果返回的是一个不包含已有同样 UID 连接的连接集合。
 	retColl := objColl.Reject(func(item interface{}, key int) bool {
-		if item.(wsClients).Uid == clientMsg.Data.Uid {
+		if item.(WsClients).Uid == clientMsg.Data.Uid {
 			// 如果已有同样的UID连接，则向该连接发送无效的错误消息，并返回 true
-			item.(wsClients).Conn.WriteMessage(websocket.TextMessage, []byte(`{"status":-1,"data":[]}`))
+			item.(WsClients).Conn.WriteMessage(websocket.TextMessage, []byte(`{"status":-1,"data":[]}`))
 			return true
 		}
 		return false
 	})
 
 	// 将当前用户信息添加到 retColl 中
-	retColl.Append(wsClients{
+	retColl.Append(WsClients{
 		Conn:       c,
 		RemoteAddr: c.RemoteAddr().String(),
 		Uid:        clientMsg.Data.Uid,
@@ -326,7 +300,7 @@ func handleConnClients(c *websocket.Conn, roomId string) {
 //	toUserUid := clientMsg.Data.ToUid
 //	assignRoom := rooms[roomIdInt]
 //	for _, c := range assignRoom {
-//		stringUid := c.(wsClients).Uid
+//		stringUid := c.(WsClients).Uid
 //		if stringUid == toUserUid {
 //			return c
 //		}
@@ -344,8 +318,8 @@ func notify(msg string, roomId string) {
 	// 遍历该房间中所有的客户端连接对象，并向除了当前连接对象之外的其它客户端连接对象发送消息
 	//fmt.Println("当前房间的连接：", assignRoom)
 	for _, client := range assignRoom {
-		fmt.Println(client.(wsClients).RemoteAddr)
-		client.(wsClients).Conn.WriteMessage(websocket.TextMessage, []byte(msg))
+		fmt.Println(client.(WsClients).RemoteAddr)
+		client.(WsClients).Conn.WriteMessage(websocket.TextMessage, []byte(msg))
 	}
 	fmt.Println("发送成功")
 	fmt.Println()
@@ -363,15 +337,15 @@ func disconnect(conn *websocket.Conn) {
 	// 过滤出需离开的连接对象
 	retColl := objColl.Reject(func(item interface{}, key int) bool {
 		// 如果当前连接的RemoteAddr和item的RemoteAddr相同，则执行对应的离线流程
-		if item.(wsClients).RemoteAddr == conn.RemoteAddr().String() {
-			data := msgData{
-				Username: item.(wsClients).Username,
-				Uid:      item.(wsClients).Uid,
+		if item.(WsClients).RemoteAddr == conn.RemoteAddr().String() {
+			data := models.MsgData{
+				Username: item.(WsClients).Username,
+				Uid:      item.(WsClients).Uid,
 				Time:     time.Now().UnixNano() / 1e6, // 13位  10位 => now.Unix()
 				RoomId:   roomId,
 			}
 
-			jsonStrServeMsg := msg{
+			jsonStrServeMsg := models.WebSocketMsg{
 				Status: msgTypeOffline,
 				Data:   data,
 			}
@@ -379,7 +353,7 @@ func disconnect(conn *websocket.Conn) {
 			disMsg := string(serveMsgStr)
 
 			// 关闭连接，并向整个房间的在线连接发送离线通知消息
-			item.(wsClients).Conn.Close()
+			item.(WsClients).Conn.Close()
 			notify(disMsg, roomId)
 			return true
 		}
@@ -393,13 +367,13 @@ func disconnect(conn *websocket.Conn) {
 }
 
 // 格式化传送给客户端的消息数据
-func formatServeMsgStr(clientMsg *msg) ([]byte, msg) {
+func formatServeMsgStr(clientMsg *models.WebSocketMsg) ([]byte, models.WebSocketMsg) {
 	roomId, roomIdInt := getRoomId(clientMsg)
 	status := clientMsg.Status
 
 	//log.Println(reflect.TypeOf(var))
 
-	data := msgData{
+	data := models.MsgData{
 		Username: clientMsg.Data.Username,
 		Uid:      clientMsg.Data.Uid,
 		RoomId:   roomId,
@@ -456,7 +430,7 @@ func formatServeMsgStr(clientMsg *msg) ([]byte, msg) {
 		data.List = ro
 	}
 
-	jsonStrServeMsg := msg{
+	jsonStrServeMsg := models.WebSocketMsg{
 		Status: status,
 		Data:   data,
 	}
@@ -465,14 +439,14 @@ func formatServeMsgStr(clientMsg *msg) ([]byte, msg) {
 	return serveMsgStr, jsonStrServeMsg
 }
 
-func getRoomId(clientMsg *msg) (string, int) {
+func getRoomId(clientMsg *models.WebSocketMsg) (string, int) {
 	roomId := clientMsg.Data.RoomId
 
 	roomIdInt, _ := strconv.Atoi(roomId)
 	return roomId, roomIdInt
 }
 
-func requestGPT(clientMsg *msg) {
+func requestGPT(clientMsg *models.WebSocketMsg) {
 	fmt.Println(clientMsg.Data.Content)
 	pattern := "@GPT"
 	var reply *gpt.GptMsgResponse
@@ -499,7 +473,7 @@ func requestGPT(clientMsg *msg) {
 			})
 
 			// 制作消息
-			data := msgData{
+			data := models.MsgData{
 				Username:  models.ChatGptName,
 				Uid:       strconv.Itoa(ChatGptIdInt),
 				RoomId:    roomId,
@@ -510,12 +484,13 @@ func requestGPT(clientMsg *msg) {
 				ID:        message.ID,
 			}
 
-			jsonStrServeMsg := msg{
+			jsonStrServeMsg := models.WebSocketMsg{
 				Status: msgTypeSend,
 				Data:   data,
-				Conn:   nil,
 			}
-			sMsg <- jsonStrServeMsg
+			//models.SMsg <- jsonStrServeMsg
+			serveMsgBytes, _ := json.Marshal(jsonStrServeMsg)
+			publishMsg(serveMsgBytes)
 		}
 	}
 
