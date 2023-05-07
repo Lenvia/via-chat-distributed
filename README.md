@@ -45,6 +45,6 @@
   - [x] nginx（ip_hash）
   - [x] 远程数据库
   - [x] GRPC（access GPT）
-  - [ ] 【紧急】消息队列，多主机通信
+  - [x] NATS 消息队列，多主机通信
 - [ ] 音频、图片、文件等多模态
 - [ ] langchain
