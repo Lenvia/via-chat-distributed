@@ -23,7 +23,6 @@ func CreateBot(file *ini.File) {
 			"avatar_id": "1",
 		})
 	}
-
 }
 
 func InitGptClient() {

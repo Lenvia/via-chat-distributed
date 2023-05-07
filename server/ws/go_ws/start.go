@@ -1,13 +1,12 @@
-package primary
+package go_ws
 
 import (
 	"github.com/gin-gonic/gin"
 	"via-chat-distributed/ws"
-	"via-chat-distributed/ws/go_ws"
 )
 
 func Create() ws.ServeInterface {
-	return &go_ws.GoServe{}
+	return &GoServe{}
 }
 
 // Start 启动 websocket

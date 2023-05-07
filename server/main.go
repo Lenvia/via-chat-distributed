@@ -43,7 +43,7 @@ func main() {
 
 	//router.SetHTMLTemplate(views.GoTpl) // 加载模板文件
 
-	go_ws.CleanOfflineConn() // 清理已离线的 WebSocket 连接
+	go_ws.InitConn() // 清理已离线的 WebSocket 连接
 
 	log.Println("listening port:", port) // 打印监听端口的地址信息
 

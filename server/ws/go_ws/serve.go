@@ -102,7 +102,7 @@ func Run(gin *gin.Context) {
 
 	// 对于每一个客户端连接，也会新建一个协程去监听 enterRooms 和 models.SMsg 这两个通道。
 	// 多个协程可以并发读写通道，但在任意时刻，只有其中的一个协程可以读取或写入该通道
-	go write()
+	go Write()
 
 	select {} // 在无限循环中等待客户端的响应，这是阻塞的。当读协程或写协程的通道收到信息时，将继续进行操作。
 
@@ -213,8 +213,8 @@ func read(c *websocket.Conn) {
 	}
 }
 
-// write 函数是单独在一个 goroutine 中执行的，用于向所有 WebSocket 客户端发送消息
-func write() {
+// Write 函数是单独在一个 goroutine 中执行的，用于向所有 WebSocket 客户端发送消息
+func Write() {
 	defer func() {
 		//捕获write抛出的panic
 		if err := recover(); err != nil {

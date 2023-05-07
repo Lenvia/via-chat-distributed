@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"via-chat-distributed/api/v1"
 	"via-chat-distributed/middleware"
-	"via-chat-distributed/ws/primary"
+	"via-chat-distributed/ws/go_ws"
 )
 
 func InitRoute() *gin.Engine {
@@ -27,7 +27,7 @@ func InitRoute() *gin.Engine {
 
 		sr.POST("/login", v1.Login)
 		sr.GET("/logout", v1.Logout)
-		sr.GET("/ws", primary.Start)
+		sr.GET("/ws", go_ws.Start)
 
 		authorized := sr.Group("/")
 		authorized.Use(middleware.JwtToken())

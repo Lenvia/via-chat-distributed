@@ -7,7 +7,7 @@ import (
 	"via-chat-distributed/services/helper"
 	"via-chat-distributed/services/message_service"
 	"via-chat-distributed/services/user_service"
-	"via-chat-distributed/ws/primary"
+	"via-chat-distributed/ws/go_ws"
 )
 
 // Index 函数用于显示应用程序的登录界面。
@@ -29,12 +29,12 @@ func Home(c *gin.Context) {
 	userInfo := user_service.GetUserInfo(c)
 
 	rooms := []map[string]interface{}{
-		{"id": 1, "num": primary.OnlineRoomUserCount(1)},
-		{"id": 2, "num": primary.OnlineRoomUserCount(2)},
-		{"id": 3, "num": primary.OnlineRoomUserCount(3)},
-		{"id": 4, "num": primary.OnlineRoomUserCount(4)},
-		{"id": 5, "num": primary.OnlineRoomUserCount(5)},
-		{"id": 6, "num": primary.OnlineRoomUserCount(6)},
+		{"id": 1, "num": go_ws.OnlineRoomUserCount(1)},
+		{"id": 2, "num": go_ws.OnlineRoomUserCount(2)},
+		{"id": 3, "num": go_ws.OnlineRoomUserCount(3)},
+		{"id": 4, "num": go_ws.OnlineRoomUserCount(4)},
+		{"id": 5, "num": go_ws.OnlineRoomUserCount(5)},
+		{"id": 6, "num": go_ws.OnlineRoomUserCount(6)},
 	}
 
 	c.JSON(http.StatusOK, gin.H{
