@@ -62,19 +62,20 @@ type pingStorage struct {
 	Time       int64           // 心跳包发送时间
 }
 
-// 变量定义初始化
+// 全局变量定义初始化（当前server服务的所有用户共享）
 var (
 	wsUpgrader = websocket.Upgrader{} // WebSocket 升级器，用于升级普通的 HTTP 连接为 WebSocket 连接
 	clientMsg  = msg{}
 	mutex      = sync.Mutex{}
 
 	// rooms = [roomCount + 1][]wsClients{}
-	rooms      = make(map[int][]interface{}) // 聊天室 map，以房间 id 为 key，保存连接对象和其他客户端信息
-	enterRooms = make(chan wsClients)        // 进入聊天室的客户端连接，用于处理客户端连接请求
-	sMsg       = make(chan msg)              // 发送的消息，用于处理客户端的消息
-	offline    = make(chan *websocket.Conn)  // 离线客户端的连接，用于处理客户端断开连接的请求
-	chNotify   = make(chan int, 1)           // 通知客户端，用于处理对聊天室客户端状态变化的通知
-	pingMap    []interface{}                 // 心跳列表，存储客户端的心跳检测信息
+	rooms       = make(map[int][]interface{}) // 聊天室 map，以房间 id 为 key，保存连接对象和其他客户端信息
+	conn2roomId = make(map[*websocket.Conn]string)
+	enterRooms  = make(chan wsClients)       // 进入聊天室的客户端连接，用于处理客户端连接请求
+	sMsg        = make(chan msg)             // 发送的消息，用于处理客户端的消息
+	offline     = make(chan *websocket.Conn) // 离线客户端的连接，用于处理客户端断开连接的请求
+	chNotify    = make(chan int, 1)          // 通知客户端，用于处理对聊天室客户端状态变化的通知
+	pingMap     []interface{}                // 心跳列表，存储客户端的心跳检测信息
 )
 
 // 定义消息类型
@@ -85,6 +86,15 @@ const msgTypeGetOnlineUser = 4 // 获取用户列表
 const msgTypePrivateChat = 5   // 私聊
 
 const roomCount = 6 // 房间总数
+
+func publishMsg(roomId string, serializedMsg []byte) {
+	err := models.NC.Publish(models.BaseTopic+roomId, serializedMsg)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// ---------------------------------------------------------------------------------
 
 type GoServe struct {
 	ws.ServeInterface
@@ -184,7 +194,6 @@ func read(c *websocket.Conn) {
 
 	for { // 循环，不断读取客户端发来的消息
 		_, message, err := c.ReadMessage()
-		//log.Println("client message", string(message), c.RemoteAddr())
 		if err != nil { // 离线通知
 			// 将该客户端的连接对象添加到 offline 通道中，等待下一次检查时断开连接
 			offline <- c
@@ -207,8 +216,8 @@ func read(c *websocket.Conn) {
 		json.Unmarshal(message, &clientMsg)
 		fmt.Println("来自客户端的消息", clientMsg, c.RemoteAddr())
 		if clientMsg.Data.Uid != "" { // 已经登录过的用户
+			roomId, _ := getRoomId(clientMsg)
 			if clientMsg.Status == msgTypeOnline { // 进入房间，建立连接
-				roomId, _ := getRoomId()
 				enterRooms <- wsClients{
 					Conn:       c,
 					RemoteAddr: c.RemoteAddr().String(),
@@ -220,7 +229,9 @@ func read(c *websocket.Conn) {
 			}
 
 			// 根据客户端发送的消息类型，将其转化为需要发送给其他客户端的服务端消息，并添加到消息队列中，等待发送
-			_, serveMsg := formatServeMsgStr(clientMsg.Status, c)
+			_, serveMsg := formatServeMsgStr(clientMsg.Status, roomId)
+			//publishMsg(roomId, serveMsgBytes)
+
 			sMsg <- serveMsg
 
 			go requestGPT()
@@ -242,7 +253,7 @@ func write() {
 		select {
 		// 如果从 enterRooms 通道中获取到一个客户端连接信息，则处理该连接
 		case r := <-enterRooms:
-			handleConnClients(r.Conn)
+			handleConnClients(r.Conn, r.RoomId)
 		// 如果从 sMsg 通道中获取到一个服务端消息，则将其转化为需要发送给客户端的 JSON 字符串，并根据不同的消息类型进行相应的处理
 		case cl := <-sMsg:
 			fmt.Println("即将发送消息：", cl)
@@ -250,20 +261,20 @@ func write() {
 			switch cl.Status {
 			// 如果是在线消息或者发送消息，则向所有的客户端发送该消息
 			case msgTypeOnline, msgTypeSend:
-				notify(cl.Conn, string(serveMsgStr)) // 发送者，发送消息
+				notify(string(serveMsgStr), cl.Data.RoomId) // 发送者，发送消息
 
 			case msgTypeGetOnlineUser:
 				// 无缓冲区通道 chNotify 确保同一时刻只有一个协程向客户端发送消息
 				chNotify <- 1
 				cl.Conn.WriteMessage(websocket.TextMessage, serveMsgStr)
 				<-chNotify
-			case msgTypePrivateChat:
-				chNotify <- 1
-				toC := findToUserCoonClient() // 查找需要发送消息的客户端连接对象，并发送消息
-				if toC != nil {
-					toC.(wsClients).Conn.WriteMessage(websocket.TextMessage, serveMsgStr)
-				}
-				<-chNotify
+				//case msgTypePrivateChat:
+				//	chNotify <- 1
+				//	toC := findToUserCoonClient() // 查找需要发送消息的客户端连接对象，并发送消息
+				//	if toC != nil {
+				//		toC.(wsClients).Conn.WriteMessage(websocket.TextMessage, serveMsgStr)
+				//	}
+				//	<-chNotify
 			}
 		case o := <-offline:
 			disconnect(o)
@@ -271,8 +282,9 @@ func write() {
 	}
 }
 
-func handleConnClients(c *websocket.Conn) {
-	roomId, roomIdInt := getRoomId()
+func handleConnClients(c *websocket.Conn, roomId string) {
+	roomIdInt, _ := strconv.Atoi(roomId)
+	conn2roomId[c] = roomId
 
 	objColl := collection.NewObjCollection(rooms[roomIdInt])
 
@@ -308,25 +320,25 @@ func handleConnClients(c *websocket.Conn) {
 }
 
 // findToUserCoonClient 获取私聊的用户连接
-func findToUserCoonClient() interface{} {
-	_, roomIdInt := getRoomId()
-
-	toUserUid := clientMsg.Data.ToUid
-	assignRoom := rooms[roomIdInt]
-	for _, c := range assignRoom {
-		stringUid := c.(wsClients).Uid
-		if stringUid == toUserUid {
-			return c
-		}
-	}
-
-	return nil
-}
+//func findToUserCoonClient() interface{} {
+//	_, roomIdInt := getRoomId(clientMsg)
+//
+//	toUserUid := clientMsg.Data.ToUid
+//	assignRoom := rooms[roomIdInt]
+//	for _, c := range assignRoom {
+//		stringUid := c.(wsClients).Uid
+//		if stringUid == toUserUid {
+//			return c
+//		}
+//	}
+//
+//	return nil
+//}
 
 // notify 函数用于向所有连接到同一个房间的客户端发送消息
-func notify(conn *websocket.Conn, msg string) {
+func notify(msg string, roomId string) {
 	chNotify <- 1 // 利用channel阻塞 避免并发去对同一个连接发送消息出现panic: concurrent write to websocket connection这样的异常
-	_, roomIdInt := getRoomId()
+	roomIdInt, _ := strconv.Atoi(roomId)
 	assignRoom := rooms[roomIdInt]
 	//fmt.Println("将要广播的房间号为：", roomIdInt)
 	// 遍历该房间中所有的客户端连接对象，并向除了当前连接对象之外的其它客户端连接对象发送消息
@@ -342,7 +354,8 @@ func notify(conn *websocket.Conn, msg string) {
 
 // 离线通知
 func disconnect(conn *websocket.Conn) {
-	_, roomIdInt := getRoomId()
+	roomId := conn2roomId[conn]
+	roomIdInt, _ := strconv.Atoi(roomId)
 
 	// 创建一个通用对象集合，存储当前房间的所有连接对象
 	objColl := collection.NewObjCollection(rooms[roomIdInt])
@@ -355,6 +368,7 @@ func disconnect(conn *websocket.Conn) {
 				Username: item.(wsClients).Username,
 				Uid:      item.(wsClients).Uid,
 				Time:     time.Now().UnixNano() / 1e6, // 13位  10位 => now.Unix()
+				RoomId:   roomId,
 			}
 
 			jsonStrServeMsg := msg{
@@ -366,7 +380,7 @@ func disconnect(conn *websocket.Conn) {
 
 			// 关闭连接，并向整个房间的在线连接发送离线通知消息
 			item.(wsClients).Conn.Close()
-			notify(conn, disMsg)
+			notify(disMsg, roomId)
 			return true
 		}
 		return false
@@ -375,12 +389,13 @@ func disconnect(conn *websocket.Conn) {
 	// 将过滤后的连接对象重新转换为接口类型的切片，并更新 rooms 对应房间中存储的连接对象集合
 	interfaces, _ := retColl.ToInterfaces()
 	rooms[roomIdInt] = interfaces
+	delete(conn2roomId, conn)
 }
 
 // 格式化传送给客户端的消息数据
-func formatServeMsgStr(status int, conn *websocket.Conn) ([]byte, msg) {
+func formatServeMsgStr(status int, roomId string) ([]byte, msg) {
 
-	roomId, roomIdInt := getRoomId()
+	roomIdInt, _ := strconv.Atoi(roomId)
 
 	//log.Println(reflect.TypeOf(var))
 
@@ -444,14 +459,13 @@ func formatServeMsgStr(status int, conn *websocket.Conn) ([]byte, msg) {
 	jsonStrServeMsg := msg{
 		Status: status,
 		Data:   data,
-		Conn:   conn,
 	}
 	serveMsgStr, _ := json.Marshal(jsonStrServeMsg)
 
 	return serveMsgStr, jsonStrServeMsg
 }
 
-func getRoomId() (string, int) {
+func getRoomId(clientMsg msg) (string, int) {
 	roomId := clientMsg.Data.RoomId
 
 	roomIdInt, _ := strconv.Atoi(roomId)
@@ -472,7 +486,7 @@ func requestGPT() {
 				return
 			}
 
-			roomId, _ := getRoomId()
+			roomId, _ := getRoomId(clientMsg)
 			// 持久化
 			var message models.Message
 			ChatGptIdInt := int(models.FindUserByField("username", models.ChatGptName).ID)

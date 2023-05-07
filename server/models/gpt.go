@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"gopkg.in/ini.v1"
 	"log"
@@ -26,7 +27,8 @@ func CreateBot(file *ini.File) {
 }
 
 func InitGptClient() {
-	l, err := grpc.Dial("10.242.228.32:8765", grpc.WithInsecure())
+	url := viper.GetString("cvm.ip") + ":" + viper.GetString("cvm.port")
+	l, err := grpc.Dial(url, grpc.WithInsecure())
 	if err != nil {
 		log.Println(err)
 		return
