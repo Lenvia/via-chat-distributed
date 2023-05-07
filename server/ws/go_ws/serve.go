@@ -41,8 +41,8 @@ type pingStorage struct {
 // 全局变量定义初始化（当前server服务的所有用户共享）
 var (
 	wsUpgrader = websocket.Upgrader{} // WebSocket 升级器，用于升级普通的 HTTP 连接为 WebSocket 连接
-	clientMsg  = models.WebSocketMsg{}
-	mutex      = sync.Mutex{}
+	//clientMsg  = models.WebSocketMsg{}
+	mutex = sync.Mutex{}
 
 	// rooms = [roomCount + 1][]WsClients{}
 	rooms       = make(map[int][]interface{}) // 聊天室 map，以房间 id 为 key，保存连接对象和其他客户端信息
@@ -189,6 +189,7 @@ func read(c *websocket.Conn) {
 		}
 
 		// 最关键的地方！这里谨慎变更
+		var clientMsg models.WebSocketMsg
 		json.Unmarshal(message, &clientMsg)
 		fmt.Println("来自客户端的消息", clientMsg, c.RemoteAddr())
 		if clientMsg.Data.Uid != "" { // 已经登录过的用户
@@ -227,7 +228,7 @@ func Write() {
 		select {
 		// 如果从 enterRooms 通道中获取到一个客户端连接信息，则处理该连接
 		case r := <-enterRooms:
-			handleConnClients(r.Conn, r.RoomId)
+			handleConnClients(&r)
 		// 如果从 models.SMsg 通道中获取到一个服务端消息，则将其转化为需要发送给客户端的 JSON 字符串，并根据不同的消息类型进行相应的处理
 		case cl := <-models.SMsg:
 			fmt.Println("即将发送消息：", cl)
@@ -256,7 +257,10 @@ func Write() {
 	}
 }
 
-func handleConnClients(c *websocket.Conn, roomId string) {
+func handleConnClients(clients *WsClients) {
+	c := clients.Conn
+	roomId := clients.RoomId
+
 	roomIdInt, _ := strconv.Atoi(roomId)
 	conn2roomId[c] = roomId
 
@@ -265,7 +269,7 @@ func handleConnClients(c *websocket.Conn, roomId string) {
 	// 使用 objColl.Reject 过滤出不是当前客户端的连接对象
 	// 最终结果返回的是一个不包含已有同样 UID 连接的连接集合。
 	retColl := objColl.Reject(func(item interface{}, key int) bool {
-		if item.(WsClients).Uid == clientMsg.Data.Uid {
+		if item.(WsClients).Uid == clients.Uid {
 			// 如果已有同样的UID连接，则向该连接发送无效的错误消息，并返回 true
 			item.(WsClients).Conn.WriteMessage(websocket.TextMessage, []byte(`{"status":-1,"data":[]}`))
 			return true
@@ -277,10 +281,10 @@ func handleConnClients(c *websocket.Conn, roomId string) {
 	retColl.Append(WsClients{
 		Conn:       c,
 		RemoteAddr: c.RemoteAddr().String(),
-		Uid:        clientMsg.Data.Uid,
-		Username:   clientMsg.Data.Username,
+		Uid:        clients.Uid,
+		Username:   clients.Username,
 		RoomId:     roomId,
-		AvatarId:   clientMsg.Data.AvatarId,
+		AvatarId:   clients.AvatarId,
 	})
 
 	interfaces, _ := retColl.ToInterfaces()
