@@ -387,16 +387,16 @@ func formatServeMsgStr(clientMsg *models.WebSocketMsg) ([]byte, models.WebSocket
 
 	// 如果消息类型是发送消息或私聊消息
 	if status == msgTypeSend || status == msgTypePrivateChat {
-		data.AvatarId = clientMsg.Data.AvatarId
+		imageUrl := clientMsg.Data.ImageUrl
 		content := clientMsg.Data.Content
-
-		data.Content = content
 		if helper.MbStrLen(content) > 800 {
-			// 如果内容的长度超过800个字符，则将其截断
-			data.Content = string([]rune(content)[:800])
+			content = string([]rune(content)[:800]) // 如果内容的长度超过800个字符，则将其截断
 		}
 
+		data.Content = content
 		data.ToUid = clientMsg.Data.ToUid
+		data.AvatarId = clientMsg.Data.AvatarId
+
 		toUid, _ := strconv.Atoi(data.ToUid)
 		intUid, _ := strconv.Atoi(data.Uid)
 		createAt := time.Now()
@@ -407,20 +407,15 @@ func formatServeMsgStr(clientMsg *models.WebSocketMsg) ([]byte, models.WebSocket
 			Content:   content,
 			RoomId:    roomIdInt,
 			CreatedAt: createAt,
-		}
-		if clientMsg.Data.ImageUrl != "" {
-			// 存在图片，同时保存消息的图片信息
-			msg.ImageUrl = clientMsg.Data.ImageUrl
+			ImageUrl:  imageUrl, // 如果不存在图片就是空字符串
 		}
 
 		go func() { // 异步持久化
 			msg = models.SaveContent(msg)
 		}()
 
-		// 创建时间封装进去，发送回客户端
 		data.CreatedAt = createAt
 		data.ID = uuid.New().String()
-
 	}
 	// 如果消息类型是获取在线用户列表
 	if status == msgTypeGetOnlineUser {
