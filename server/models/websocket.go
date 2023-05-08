@@ -6,6 +6,7 @@ var SMsg = make(chan WebSocketMsg, 10) // 发送的消息，用于处理客户�
 
 // MsgData 结构体定义了消息体的数据结构
 type MsgData struct {
+	ID       string        `json:"id"`        // 消息ID
 	Uid      string        `json:"uid"`       // 发送者 uid
 	Username string        `json:"username"`  // 发送者用户名
 	AvatarId string        `json:"avatar_id"` // 发送者头像 id
@@ -17,9 +18,7 @@ type MsgData struct {
 	List     []interface{} // 房间中其他客户端信息
 	Time     int64         // 消息发送时间
 	// 下面是数据库额外附加信息，兼容一下
-	ID        uint      `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // WebSocketMsg 结构体定义了 WebSocket 消息体

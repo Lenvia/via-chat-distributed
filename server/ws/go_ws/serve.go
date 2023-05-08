@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/jianfengye/collection"
 	"log"
@@ -398,24 +399,27 @@ func formatServeMsgStr(clientMsg *models.WebSocketMsg) ([]byte, models.WebSocket
 		data.ToUid = clientMsg.Data.ToUid
 		toUid, _ := strconv.Atoi(data.ToUid)
 		intUid, _ := strconv.Atoi(data.Uid)
+		createAt := time.Now()
 
 		msg := models.Message{
-			UserId:   intUid,
-			ToUserId: toUid,
-			Content:  content,
-			RoomId:   roomIdInt,
+			UserId:    intUid,
+			ToUserId:  toUid,
+			Content:   content,
+			RoomId:    roomIdInt,
+			CreatedAt: createAt,
 		}
 		if clientMsg.Data.ImageUrl != "" {
 			// 存在图片，同时保存消息的图片信息
 			msg.ImageUrl = clientMsg.Data.ImageUrl
 		}
 
-		msg = models.SaveContent(msg)
+		go func() { // 异步持久化
+			msg = models.SaveContent(msg)
+		}()
 
 		// 创建时间封装进去，发送回客户端
-		data.CreatedAt = msg.CreatedAt
-		data.UpdatedAt = msg.UpdatedAt
-		data.ID = msg.ID
+		data.CreatedAt = createAt
+		data.ID = uuid.New().String()
 
 	}
 	// 如果消息类型是获取在线用户列表
@@ -456,15 +460,19 @@ func requestGPT(clientMsg *models.WebSocketMsg) {
 			}
 
 			roomId, roomIdInt := getRoomId(clientMsg)
+			createAt := time.Now()
+
 			// 持久化
 			message := models.Message{
-				UserId:   models.ChatGptIdInt,
-				ToUserId: 0,
-				Content:  reply.String(),
-				RoomId:   roomIdInt,
+				UserId:    models.ChatGptIdInt,
+				ToUserId:  0,
+				Content:   reply.String(),
+				RoomId:    roomIdInt,
+				CreatedAt: createAt,
 			}
-
-			message = models.SaveContent(message)
+			go func() { // 异步持久化
+				message = models.SaveContent(message)
+			}()
 
 			// 制作消息
 			data := models.MsgData{
@@ -473,9 +481,8 @@ func requestGPT(clientMsg *models.WebSocketMsg) {
 				RoomId:    roomId,
 				Content:   reply.String(),
 				Time:      time.Now().UnixNano() / 1e6, // 13位  10位 => now.Unix()
-				CreatedAt: message.CreatedAt,
-				UpdatedAt: message.UpdatedAt,
-				ID:        message.ID,
+				CreatedAt: createAt,
+				ID:        uuid.New().String(),
 			}
 
 			jsonStrServeMsg := models.WebSocketMsg{
