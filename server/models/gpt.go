@@ -12,17 +12,20 @@ import (
 
 var GptClient gpt.GptMsgSenderClient
 var ChatGptName string
+var ChatGptIdInt int
 
 func CreateBot(file *ini.File) {
 	ChatGptName = file.Section("gpt").Key("GPT_NAME").String()
 	user := FindUserByField("username", ChatGptName)
 	if user.ID <= 0 {
-		_ = AddUser(map[string]interface{}{
-			"username":  ChatGptName,
-			"password":  "NULL",
-			"avatar_id": "1",
+		user = AddUser(User{
+			Username: ChatGptName,
+			Password: "NULL",
+			AvatarId: "1",
 		})
+
 	}
+	ChatGptIdInt = int(user.ID)
 }
 
 func InitGptClient() {

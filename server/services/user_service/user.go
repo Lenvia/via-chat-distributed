@@ -46,10 +46,10 @@ func Login(c *gin.Context) {
 
 	} else {
 		// 新用户
-		userInfo = models.AddUser(map[string]interface{}{
-			"username":  username,
-			"password":  encryptedPwd,
-			"avatar_id": avatarId,
+		userInfo = models.AddUser(models.User{
+			Username: username,
+			Password: encryptedPwd,
+			AvatarId: avatarId,
 		})
 	}
 
@@ -77,7 +77,7 @@ func GetUserInfo(c *gin.Context) map[string]interface{} {
 
 	if username != "" { // 使用此ID检索用户信息，例如：ID，用户名和头像编号
 		user := models.FindUserByField("username", username)
-		data["uid"] = user.ID
+		data["uid"] = user.ID // 这里还没做转换是因为 data["uid"] 字段与 user.ID column 对应 "id" 字段不一致
 		data["username"] = user.Username
 		data["avatar_id"] = user.AvatarId
 	}

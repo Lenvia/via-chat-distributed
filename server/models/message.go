@@ -4,7 +4,6 @@ import (
 	"gorm.io/gorm"
 	"log"
 	"sort"
-	"strconv"
 	"time"
 )
 
@@ -22,22 +21,7 @@ type Message struct {
 }
 
 // SaveContent 函数将消息内容保存到数据库中，value 参数为消息内容的 map 类型数据。
-func SaveContent(value interface{}) Message {
-	var m Message
-	m.UserId = value.(map[string]interface{})["user_id"].(int)
-	m.ToUserId = value.(map[string]interface{})["to_user_id"].(int)
-	m.Content = value.(map[string]interface{})["content"].(string)
-
-	roomIdStr := value.(map[string]interface{})["room_id"].(string)
-
-	roomIdInt, _ := strconv.Atoi(roomIdStr)
-
-	m.RoomId = roomIdInt
-
-	if _, ok := value.(map[string]interface{})["image_url"]; ok {
-		m.ImageUrl = value.(map[string]interface{})["image_url"].(string)
-	}
-
+func SaveContent(m Message) Message {
 	tx := ChatDB.Begin()
 	defer func() {
 		if r := recover(); r != nil {

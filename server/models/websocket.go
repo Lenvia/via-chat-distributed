@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-var SMsg = make(chan WebSocketMsg) // 发送的消息，用于处理客户端的消息
+var SMsg = make(chan WebSocketMsg, 10) // 发送的消息，用于处理客户端的消息
 
 // MsgData 结构体定义了消息体的数据结构
 type MsgData struct {

@@ -16,12 +16,7 @@ type User struct {
 	UpdatedAt time.Time `gorm:"column:updated_at"`
 }
 
-func AddUser(value interface{}) User {
-	var u User
-	u.Username = value.(map[string]interface{})["username"].(string)
-	u.Password = value.(map[string]interface{})["password"].(string)
-	u.AvatarId = value.(map[string]interface{})["avatar_id"].(string)
-
+func AddUser(u User) User {
 	tx := ChatDB.Begin()
 	defer func() {
 		if r := recover(); r != nil {

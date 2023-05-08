@@ -377,7 +377,7 @@ func formatServeMsgStr(clientMsg *models.WebSocketMsg) ([]byte, models.WebSocket
 
 	//log.Println(reflect.TypeOf(var))
 
-	data := models.MsgData{
+	data := models.MsgData{ // 需要制作的消息
 		Username: clientMsg.Data.Username,
 		Uid:      clientMsg.Data.Uid,
 		RoomId:   roomId,
@@ -396,31 +396,22 @@ func formatServeMsgStr(clientMsg *models.WebSocketMsg) ([]byte, models.WebSocket
 		}
 
 		data.ToUid = clientMsg.Data.ToUid
-		toUidStr := clientMsg.Data.ToUid
-		toUid, _ := strconv.Atoi(toUidStr)
+		toUid, _ := strconv.Atoi(data.ToUid)
+		intUid, _ := strconv.Atoi(data.Uid)
 
-		// 保存消息
-		stringUid := data.Uid
-		intUid, _ := strconv.Atoi(stringUid)
-
-		var msg models.Message
+		msg := models.Message{
+			UserId:   intUid,
+			ToUserId: toUid,
+			Content:  content,
+			RoomId:   roomIdInt,
+		}
 		if clientMsg.Data.ImageUrl != "" {
 			// 存在图片，同时保存消息的图片信息
-			msg = models.SaveContent(map[string]interface{}{
-				"user_id":    intUid,
-				"to_user_id": toUid,
-				"content":    data.Content,
-				"room_id":    data.RoomId,
-				"image_url":  clientMsg.Data.ImageUrl,
-			})
-		} else {
-			msg = models.SaveContent(map[string]interface{}{
-				"user_id":    intUid,
-				"to_user_id": toUid,
-				"content":    data.Content,
-				"room_id":    data.RoomId,
-			})
+			msg.ImageUrl = clientMsg.Data.ImageUrl
 		}
+
+		msg = models.SaveContent(msg)
+
 		// 创建时间封装进去，发送回客户端
 		data.CreatedAt = msg.CreatedAt
 		data.UpdatedAt = msg.UpdatedAt
@@ -464,22 +455,21 @@ func requestGPT(clientMsg *models.WebSocketMsg) {
 				return
 			}
 
-			roomId, _ := getRoomId(clientMsg)
+			roomId, roomIdInt := getRoomId(clientMsg)
 			// 持久化
-			var message models.Message
-			ChatGptIdInt := int(models.FindUserByField("username", models.ChatGptName).ID)
+			message := models.Message{
+				UserId:   models.ChatGptIdInt,
+				ToUserId: 0,
+				Content:  reply.String(),
+				RoomId:   roomIdInt,
+			}
 
-			message = models.SaveContent(map[string]interface{}{
-				"user_id":    ChatGptIdInt,
-				"to_user_id": 0,
-				"content":    reply.String(),
-				"room_id":    roomId,
-			})
+			message = models.SaveContent(message)
 
 			// 制作消息
 			data := models.MsgData{
 				Username:  models.ChatGptName,
-				Uid:       strconv.Itoa(ChatGptIdInt),
+				Uid:       strconv.Itoa(models.ChatGptIdInt),
 				RoomId:    roomId,
 				Content:   reply.String(),
 				Time:      time.Now().UnixNano() / 1e6, // 13位  10位 => now.Unix()
