@@ -22,7 +22,7 @@
   go run main.go
   ```
 
-- （请自行安装 Nginx 和 NATS 服务）在调度主机上启动 Nginx 和 NATS
+- 在调度主机上启动 Nginx 、NATS、Redis（此前请自行安装各服务）
 
   ```
   cd dispath
