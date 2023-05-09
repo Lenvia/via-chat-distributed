@@ -189,7 +189,6 @@ func read(c *websocket.Conn) {
 			continue
 		}
 
-		// 最关键的地方！这里谨慎变更
 		var clientMsg models.WebSocketMsg
 		json.Unmarshal(message, &clientMsg)
 		fmt.Println("来自客户端的消息", clientMsg, c.RemoteAddr())
@@ -377,12 +376,13 @@ func formatServeMsgStr(clientMsg *models.WebSocketMsg) ([]byte, models.WebSocket
 	status := clientMsg.Status
 
 	//log.Println(reflect.TypeOf(var))
-
+	createAt := time.Now()
 	data := models.MsgData{ // 需要制作的消息
-		Username: clientMsg.Data.Username,
-		Uid:      clientMsg.Data.Uid,
-		RoomId:   roomId,
-		Time:     time.Now().UnixNano() / 1e6, // 13位  10位 => now.Unix()
+		Username:  clientMsg.Data.Username,
+		Uid:       clientMsg.Data.Uid,
+		RoomId:    roomId,
+		Time:      time.Now().UnixNano() / 1e6, // 13位  10位 => now.Unix()
+		CreatedAt: createAt,                    // 加时间戳
 	}
 
 	// 如果消息类型是发送消息或私聊消息
@@ -399,7 +399,6 @@ func formatServeMsgStr(clientMsg *models.WebSocketMsg) ([]byte, models.WebSocket
 
 		toUid, _ := strconv.Atoi(data.ToUid)
 		intUid, _ := strconv.Atoi(data.Uid)
-		createAt := time.Now()
 
 		msg := models.Message{
 			UserId:    intUid,
@@ -410,12 +409,29 @@ func formatServeMsgStr(clientMsg *models.WebSocketMsg) ([]byte, models.WebSocket
 			ImageUrl:  imageUrl, // 如果不存在图片就是空字符串
 		}
 
+		msgWithU := models.MessageWithUserInfo{
+			Message:  msg,
+			Username: clientMsg.Data.Username,
+			AvatarID: clientMsg.Data.AvatarId,
+		}
+
+		// 写入redis缓存
+		jsonBytes, err := json.Marshal(msgWithU)
+		if err != nil {
+			log.Println(err)
+		}
+		jsonString := string(jsonBytes)
+		key := "room:" + roomId + ":messages"
+		err = models.RedisClient.RPush(key, jsonString).Err()
+		if err != nil {
+			log.Println(err)
+		}
+
 		go func() { // 异步持久化
 			msg = models.SaveContent(msg)
 		}()
 
-		data.CreatedAt = createAt
-		data.ID = uuid.New().String()
+		data.ID = uuid.New().String() // data.ID和数据库的message.ID 不一样！
 	}
 	// 如果消息类型是获取在线用户列表
 	if status == msgTypeGetOnlineUser {
@@ -465,6 +481,25 @@ func requestGPT(clientMsg *models.WebSocketMsg) {
 				RoomId:    roomIdInt,
 				CreatedAt: createAt,
 			}
+
+			msgWithU := models.MessageWithUserInfo{
+				Message:  message,
+				Username: clientMsg.Data.Username,
+				AvatarID: clientMsg.Data.AvatarId,
+			}
+
+			// 写入redis缓存
+			jsonBytes, err := json.Marshal(msgWithU)
+			if err != nil {
+				log.Println(err)
+			}
+			jsonString := string(jsonBytes)
+			key := "room:" + roomId + ":messages"
+			err = models.RedisClient.RPush(key, jsonString).Err()
+			if err != nil {
+				log.Println(err)
+			}
+
 			go func() { // 异步持久化
 				message = models.SaveContent(message)
 			}()

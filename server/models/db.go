@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"github.com/go-redis/redis"
 	"github.com/spf13/viper"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -10,6 +11,7 @@ import (
 )
 
 var ChatDB *gorm.DB
+var RedisClient *redis.Client
 
 const maxRetries = 5
 const baseInterval = 5 * time.Second
@@ -41,5 +43,22 @@ func AutoCreateTable() {
 	err = ChatDB.AutoMigrate(&User{})
 	if err != nil {
 		log.Println(err)
+	}
+}
+
+func InitRedis() {
+	addr := viper.GetString("redis.ip") + ":" + viper.GetString("redis.port")
+	db := viper.GetInt("redis.db")
+	RedisClient = redis.NewClient(&redis.Options{
+		Addr:     addr,
+		Password: "", // Redis 密码，如果没有设置可以为空字符串
+		DB:       db, // Redis 数据库，默认为 0
+	})
+
+	_, err := RedisClient.Ping().Result()
+	if err != nil {
+		log.Println(err)
+	} else {
+		log.Println("redis connected.")
 	}
 }

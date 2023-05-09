@@ -36,7 +36,7 @@ func InitRoute() *gin.Engine {
 			authorized.GET("/room/:room_id", v1.Room)
 			authorized.GET("/private-web", v1.PrivateChat)
 			//authorized.POST("/img-kr-upload", v1.ImgKrUpload)
-			authorized.GET("/pagination", v1.Pagination)
+			//authorized.GET("/pagination", v1.Pagination)
 		}
 
 	}

@@ -26,9 +26,11 @@ func init() {
 		log.Fatal(err) // 读取配置文件失败，记录日志并退出程序
 	}
 
-	models.InitDB()           // 初始化数据库
+	models.InitDB()           // mysql
+	models.InitRedis()        // redis
 	models.InitGptClient()    // gpt
 	models.InitMessageQueue() // 消息队列
+
 }
 
 func main() {

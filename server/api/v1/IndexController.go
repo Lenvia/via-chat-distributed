@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
+	"via-chat-distributed/models"
 	"via-chat-distributed/services/helper"
 	"via-chat-distributed/services/message_service"
 	"via-chat-distributed/services/user_service"
@@ -109,7 +110,7 @@ func Pagination(c *gin.Context) {
 		return
 	}
 
-	var msgList []map[string]interface{}
+	var msgList []models.MessageWithUserInfo
 	if toUid != "" {
 		userInfo := user_service.GetUserInfo(c)
 
