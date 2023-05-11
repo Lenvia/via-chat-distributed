@@ -51,12 +51,25 @@ func SaveContent(m Message) Message {
 }
 
 // GetLimitMsg 函数从数据库中查询指定房间的聊天记录，roomId 参数为房间 ID，offset 参数为分页偏移量，返回值为查询结果的 map 切片。
+// 默认最新的100条
 func GetLimitMsg(roomId string, offset int) []MessageWithUserInfo {
+	var limit int64 = 100 // 最新的100条
 	var results []MessageWithUserInfo
 
 	// 首先从redis读取消息
 	key := "room:" + roomId + ":messages"
-	messages, err := RedisClient.LRange(key, 0, -1).Result()
+
+	// 获取 Redis 列表查询范围
+	listLength := RedisClient.LLen(key).Val()
+	var start, stop int64
+	stop = -1
+	if listLength >= limit {
+		start = listLength - limit
+	} else {
+		start = 0
+	}
+
+	messages, err := RedisClient.LRange(key, start, stop).Result()
 	if err != nil || len(messages) == 0 {
 		// 如果 Redis List 中不存在历史消息，则从数据库中查询历史消息
 		// 注意这里第一个是 Message！因为没有 MessageWithUserInfo 这个表
@@ -67,9 +80,10 @@ func GetLimitMsg(roomId string, offset int) []MessageWithUserInfo {
 			Where("messages.to_user_id = 0").
 			Order("messages.id desc").
 			Offset(offset).
-			Limit(100).
+			Limit(int(limit)).
 			Scan(&results)
 
+		// 上面先找到最新的N条，然后再按照id排序（反转）
 		// 如果 offset 为 0，则按照 id 升序排序
 		if offset == 0 {
 			sort.Slice(results, func(i, j int) bool {
