@@ -12,14 +12,6 @@ func InitRoute() *gin.Engine {
 	router := gin.New()
 	router.Use(middleware.Cors())
 
-	//if viper.GetString(`app.debug_mod`) == "false" {
-	//	// live 模式 打包用，使用嵌入式的静态资源FS
-	//	router.StaticFS("/static", http.FS(static.EmbedStatic))
-	//} else {
-	//	// dev 开发用 避免修改静态资源需要重启服务，使用本地的静态文件目录
-	//	router.StaticFS("/static", http.Dir("static"))
-	//}
-
 	// 创建路由分组，并启用 cookie-based 会话
 	sr := router.Group("/")
 	{

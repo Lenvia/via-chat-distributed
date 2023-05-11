@@ -322,7 +322,7 @@ func notify(msg string, roomId string) {
 	// 遍历该房间中所有的客户端连接对象，并向除了当前连接对象之外的其它客户端连接对象发送消息
 	//fmt.Println("当前房间的连接：", assignRoom)
 	for _, client := range assignRoom {
-		fmt.Println(client.(WsClients).RemoteAddr)
+		//fmt.Println(client.(WsClients).RemoteAddr)
 		client.(WsClients).Conn.WriteMessage(websocket.TextMessage, []byte(msg))
 	}
 	fmt.Println("发送成功")
