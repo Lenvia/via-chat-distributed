@@ -41,7 +41,10 @@ func StartFunc(strI string) {
 		"to_uid":    "0",
 	}
 
-	c.WriteJSON(d)
+	err = c.WriteJSON(d)
+	if err != nil {
+		log.Println(err)
+	}
 
 	for {
 		_, message, err := c.ReadMessage()

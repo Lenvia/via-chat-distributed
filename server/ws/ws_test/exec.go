@@ -12,7 +12,7 @@ var ch = make(chan int, 20)
 
 func main() {
 
-	for i := 0; i <= 200; i++ {
+	for i := 0; i <= 100; i++ {
 		wg.Add(1)
 		go execCommand(i)
 	}
